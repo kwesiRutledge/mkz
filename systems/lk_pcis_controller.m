@@ -118,7 +118,7 @@
         return
       end
 
-      if mu < 1
+      if mu < 3
         % Use very simple P controller
         obj.delta_f = -0.1*(x_lk(1)+0.05*x_lk(3));
         return
@@ -195,12 +195,8 @@
         obj.delta_f = u;
       else
         % infeasible: keep control constant
-        status
-        x_lk
-        mu
-        r_d
-        all(A_x*x_lk <= b_x)
-        obj.barrier_val = -0.05;
+        obj.delta_f = 0;   % set to 0
+        % obj.barrier_val = -0.05;
       end
      
     end

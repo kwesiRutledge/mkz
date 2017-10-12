@@ -13,9 +13,9 @@ classdef road < matlab.System & matlab.system.mixin.Propagates
   end
 
   properties(SetAccess = protected, GetAccess = public)
-    len_path;
-    path_;
-    size_path;
+    len_path = 0;
+    path_ = 0;
+    size_path = 0;
   end
   
   methods

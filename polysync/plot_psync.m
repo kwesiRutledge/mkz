@@ -1,4 +1,6 @@
-load 'data/run-736957.6425.mat'
+[filename, pathname] = uigetfile;
+
+load(strcat(pathname, '/', filename))
 
 % tmin = 15;
 % tmax = 25;
@@ -55,17 +57,22 @@ ylim([-0.5 0.5]);
 ylabel('\Delta \Psi')
 
 figure(3); clf
-subplot(211)
+subplot(311)
 hold on
 plot(lk_acc_state.r.Time(tidx), lk_acc_state.r.Data(tidx))
 ylim([-1 1])
 ylabel('r')
 
-subplot(212)
+subplot(312)
 hold on 
 plot(lk_acc_state.mu.Time(tidx), lk_acc_state.mu.Data(tidx))
 ylabel('mu')
 ylim([0, 10])
+
+subplot(313)
+hold on 
+plot(lk_acc_state.r_d.Time(tidx), lk_acc_state.r_d.Data(tidx))
+ylabel('r_d')
 
 
 % figure(4); clf

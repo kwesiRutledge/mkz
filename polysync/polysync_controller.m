@@ -2,7 +2,7 @@
 function polysync_controller()
   RTK_SENSOR_ID = 1;    % sensor id of RTK GPS
   STOP_DISTANCE = 20;   % start braking [m]
-  ST_RATIO = 16;        % steering ratio of car
+  ST_RATIO = 12;        % steering ratio of car
 
   WHEEL_RADIUS = 0.24;  % wheel radius [m]
 
@@ -31,13 +31,16 @@ function polysync_controller()
   ACC.setup(struct(), 0.0);
 
   LK = lk_pcis_controller;
-  LK.H_u = 4;   % weight in QP for steering (larger -> less aggressive centering)
+  LK.H_u = 100;   % weight in QP for steering (larger -> less aggressive centering)
   LK.setup(struct());
 
   % phase 0: shifting to D
   % phase 1: following route
   % phase 2: stopping
   % phase 3: shifting to P
+
+  % timing
+  last_timestamp = 0;
 
   % Phase variables
   brake_com = 0;    % braking phase
@@ -65,7 +68,7 @@ function polysync_controller()
     if idx2 > 0
       wheel_sp = WHEEL_RADIUS * ...
              (msg_wsr.FrontLeft + msg_wsr.FrontRight + ...
-              msg_wsr.RearLeft + msg_wsr.RearRight)/4
+              msg_wsr.RearLeft + msg_wsr.RearRight)/4;
     end
 
     if idx1 > 0
@@ -92,9 +95,13 @@ function polysync_controller()
       % Compute model inputs
       [delta_f, lk_info] = LK.step(lk_acc_state);
 
+      lk_acc_state
+      delta_f
+      lk_info
+
       if phase == uint8(1)
         % ACC controls speed
-        [throttle_com] = ACC.step(lk_acc_state, dt)
+        [throttle_com] = ACC.step(lk_acc_state, dt);
         pub_msg = get_ba_message([], throttle_com, ST_RATIO*delta_f);
 
       elseif phase == uint8(2)
@@ -112,6 +119,8 @@ function polysync_controller()
           
       pub_msg.Header.Timestamp = polysync.GetTimestamp;
       pub.step(pub_msg);    
+
+      polysync.Sleep(0.01);
     end
   end
 
