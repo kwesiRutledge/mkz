@@ -33,6 +33,8 @@
     E_lk;
     data;
     delta_f_prev;   %Buffer containing the buff_len number of previous steering inputs
+    t_horizon;
+    d_factor;
   end
   
   properties(DiscreteState)
@@ -60,6 +62,8 @@
       %  - Iz: yaw moment of inertia [kg m^2]
 
     end
+
+
   end
 
   methods(Access = protected)
@@ -72,6 +76,10 @@
       obj.delta_f = 0;
       
       obj.barrier_val = -0.1;
+
+      %Set up Time Horizon and Discount Factor
+      obj.d_factor = 1;
+      obj.t_horizon = 5;
 
       %Set Up Buffer of Previous input values
       obj.delta_f_prev = zeros(obj.buff_len,1);
@@ -163,18 +171,50 @@
       B = A_int * obj.B_lk;
       E = A_int * obj.E_lk;
 
+      n = size(A,1);
+      v = size(B,2);
+      p = size(E,2);
+
       % A = A_lk*obj.data.con.dt + eye(4);
       % B = obj.B_lk*obj.data.con.dt;
       % E = obj.E_lk*obj.data.con.dt;
       K = zeros(4,1);
       
+      % Define System Matrices for trajectories
+      % +++++++++++++++++++++++++++++++++++++++
+
+      sys0.A  = A;
+      sys0.B  = B;
+      sys0.K  = K;
+      sys0.x0 = x_lk;
+
+      sys0.C = eye(size(A,1));  %C is not going to be used here,
+                                %but in order for my function to work
+                                %I need it.
+
+      [G,H,C_big,x0_mat] = create_skaf_n_boyd_matrices(sys0,obj.t_horizon);
+
+      %define E-bar
+      for t = 1: obj.t_horizon
+        temp_E_bar{t} = E;
+      end
+      E_bar = blkdiag(temp_E_bar{:});
+
       % Define the Objective's Cost Matrices
       % ++++++++++++++++++++++++++++++++++++ 
 
-      R_x = obj.H_x;
-      r_x = obj.f_x;
+      %Make the cost matrix for the trajectory have equal weight for deviations
+      %at any point in the time horizon.
+
+      for i = 1:obj.t_horizon+1
+        temp_R_x{i} = obj.d_factor^i * ( obj.H_x );
+      end
+      R_x = blkdiag(temp_R_x{:});
+
+      r_x = repmat(obj.f_x,obj.t_horizon,1);
+
       R_u = obj.H_u;
-      r_u = -R_u*mean(obj.delta_f_prev);
+      r_u = obj.f_u;
 
       % Retrieve the Safe Set's Polyhedral Representation
       % +++++++++++++++++++++++++++++++++++++++++++++++++
@@ -187,12 +227,19 @@
       % Apply MPC Quadratic Program Solver
       % ++++++++++++++++++++++++++++++++++
 
-      H = zeros(1,1);
-      f = zeros(1,1);
+      H_cost = zeros(m,m);
+      f_cost = zeros(m,1);
       
-      H(1,1) = B'*R_x*B + R_u;
-      f(1,1) = r_u + B'*R_x*(A*x_lk + K) + B'*R_x*E*r_d + B'*r_x;
+      % H_cost(1,1) = B'*R_x*B + R_u;
+      % f_cost(1,1) = r_u + B'*R_x*(A*x_lk + K + E*r_d) + B'*r_x;
       
+      size(G)
+      size(x0_mat)
+      size((blkdiag(repmat(E,1,1,obj.t_horizon))) )
+
+      H_cost = ones(v*obj.t_horizon,v)'*H'*R_x*H*ones(obj.t_horizon*v,v) + R_u;
+      f_cost = r_u + ones(v*obj.t_horizon,v)'*H'*R_x*(G*E_bar*repmat(r_d,obj.t_horizon,1)+x0_mat );
+
       A_constr = zeros(2*m+2,1);
       b_constr = zeros(2*m+2,1);
       
@@ -208,13 +255,13 @@
                                  obj.data.con.df_max];
  
       % Objective 0.5 x' H x + f' x
-      L = chol(H, 'lower');
+      L = chol(H_cost, 'lower');
       Linv = zeros(1,1);
-      Linv(1,1) = L\eye(size(H,1));
+      Linv(1,1) = L\eye(size(H_cost,1));
       
-      [u, status] = mpcqpsolver(Linv, f, -A_constr, -b_constr, ...
+      [u, status] = mpcqpsolver(Linv, f_cost, repmat(-A_constr,obj.t_horizon+1,1), repmat(-b_constr,obj.t_horizon+1,1), ...
                       [], zeros(0,1), ...
-                      false(size(A_constr,1),1), obj.sol_opts);
+                      false(size(A_constr,1)*(obj.t_horizon+1),1), obj.sol_opts);
 
       % disp(['status = ' num2str(status) ])
 

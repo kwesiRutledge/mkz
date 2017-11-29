@@ -10,7 +10,7 @@ function [results] = mcity_data_analysis( varargin )
 		if experim_num == 1
 			mcity_data_practice
 		end
-		if experim_num == 2
-			results{n} = mcity_data_practice2;
+		if experim_num > 1
+			results{n} = eval(['mcity_data_practice' num2str(experim_num) ]);
 		end
 end

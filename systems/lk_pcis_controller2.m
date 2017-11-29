@@ -21,8 +21,6 @@
     Caf = 140000;
     Car = 120000;
     Iz = 3270;
-
-    buff_len = 1;
     
     sol_opts = struct('DataType', 'double', 'MaxIter', 200, ...
                       'FeasibilityTol', 1e-6, 'IntegrityChecks', true);
@@ -33,6 +31,7 @@
     E_lk;
     data;
     delta_f_prev;   %Buffer containing the buff_len number of previous steering inputs
+    buff_len;
   end
   
   properties(DiscreteState)
@@ -60,6 +59,14 @@
       %  - Iz: yaw moment of inertia [kg m^2]
 
     end
+
+    function changeBuffLen(obj,new_buff_len)
+      % Description:
+      %   Clears the previous input buffer (delta_f_prev) and replaces
+      %   it with a vector of all zeros with length new_buff_len.
+      obj.delta_f_prev = zeros(new_buff_len,1);
+      obj.buff_len = new_buff_len;
+    end
   end
 
   methods(Access = protected)
@@ -74,6 +81,7 @@
       obj.barrier_val = -0.1;
 
       %Set Up Buffer of Previous input values
+      obj.buff_len = 1;
       obj.delta_f_prev = zeros(obj.buff_len,1);
     end
     
@@ -140,21 +148,14 @@
       % If the speed is too low, use a simple Controller
       % ++++++++++++++++++++++++++++++++++++++++++++++++
 
-      disp(['obj.delta_f_prev = ' num2str(obj.delta_f_prev) ])
-
       if mu < 3
         % Use very simple P controller
         obj.delta_f = -0.1*(x_lk(1)+0.05*x_lk(3));
 
         %Update Buffer of Previous Inputs
+        size(obj.delta_f_prev(1:end-1))
         obj.delta_f_prev = [ obj.delta_f ; obj.delta_f_prev(1:end-1) ];
         return
-      end
-      
-      disp(['obj.delta_f_prev = ' num2str(obj.delta_f_prev) ])
-
-      if (mu < 3)
-        error('WTH.')
       end
 
       % Define the System Matrices (given the current speed)
@@ -187,7 +188,6 @@
       R_u = obj.H_u;
       %r_u = obj.f_u
       r_u = -R_u*mean(obj.delta_f_prev);
-      disp(['r_u = ' num2str(r_u) ])
 
       % Retrieve the Safe Set's Polyhedral Representation
       % +++++++++++++++++++++++++++++++++++++++++++++++++
@@ -227,7 +227,7 @@
       
       [u, status] = mpcqpsolver(Linv, f, -A_constr, -b_constr, ...
                       [], zeros(0,1), ...
-                      false(size(A_constr,1),1), obj.sol_opts)
+                      false(size(A_constr,1),1), obj.sol_opts);
 
       disp(['u = ' num2str(u) ] )
 
@@ -261,7 +261,7 @@
 
       %Update Buffer of Previous Inputs
       obj.delta_f_prev = [ obj.delta_f ; obj.delta_f_prev(1:end-1) ];
-      disp(['delta_f_prev = ' num2str([ obj.delta_f ; obj.delta_f_prev(1:end-1) ]) ])
+      disp(['delta_f_prev = ' num2str([ obj.delta_f ; obj.delta_f_prev(1:end-1) ]') ])
 
     end
 
