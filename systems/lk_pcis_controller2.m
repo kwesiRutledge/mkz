@@ -11,7 +11,6 @@
     H_x = diag([1 0 0.5 0]);
     f_x = zeros(4,1);
     H_u = 4;
-    f_u = 0;
   end
 
   properties(Nontunable)
@@ -32,6 +31,9 @@
     data;
     delta_f_prev;   %Buffer containing the buff_len number of previous steering inputs
     buff_len;
+
+    f_u = 0;
+
   end
   
   properties(DiscreteState)
@@ -79,9 +81,10 @@
       obj.delta_f = 0;
       
       obj.barrier_val = -0.1;
+      obj.qp_status = 0;
 
       %Set Up Buffer of Previous input values
-      obj.buff_len = 1;
+      obj.buff_len = 1000;
       obj.delta_f_prev = zeros(obj.buff_len,1);
     end
     
@@ -153,7 +156,7 @@
         obj.delta_f = -0.1*(x_lk(1)+0.05*x_lk(3));
 
         %Update Buffer of Previous Inputs
-        size(obj.delta_f_prev(1:end-1))
+        %size(obj.delta_f_prev(1:end-1))
         obj.delta_f_prev = [ obj.delta_f ; obj.delta_f_prev(1:end-1) ];
         return
       end
@@ -229,7 +232,7 @@
                       [], zeros(0,1), ...
                       false(size(A_constr,1),1), obj.sol_opts);
 
-      disp(['u = ' num2str(u) ] )
+      % disp(['u = ' num2str(u) ] )
 
       % disp(['status = ' num2str(status) ])
 
@@ -260,8 +263,9 @@
       end
 
       %Update Buffer of Previous Inputs
-      obj.delta_f_prev = [ obj.delta_f ; obj.delta_f_prev(1:end-1) ];
-      disp(['delta_f_prev = ' num2str([ obj.delta_f ; obj.delta_f_prev(1:end-1) ]') ])
+      %size([ obj.delta_f ; obj.delta_f_prev(1:end-1,1) ])
+      obj.delta_f_prev = reshape([ obj.delta_f ; obj.delta_f_prev(1:end-1,1) ],obj.buff_len,1);
+      % disp(['delta_f_prev = ' num2str([ obj.delta_f ; obj.delta_f_prev(1:end-1) ]') ])
 
     end
 
