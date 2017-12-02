@@ -4,12 +4,14 @@ classdef road < matlab.System & matlab.system.mixin.Propagates
     lat0 = 42.30095833;     % local center latitude   [deg]
     long0 = -83.69758056;   % local center longitude  [deg]
     h0 = 0;                 % local center altitude
-    pathfile = 'mcity/fixed_path.ascii';    % path in local (xE, yN)
+    pathfile = 'c:/mkz/mcity/carsim_mcity_outer_smooth.ascii';    % path in local (xE, yN)
     circular = 0;
     
     N_path = 3;             % number of points in each direction to fit
     N_interp = 10;          % number of subdivisions to find closes point
     dt = 0.1;               % time step for computing derivatives
+
+    compute_preview = false; % compute 50-step preview
   end
 
   properties(SetAccess = protected, GetAccess = public)
@@ -46,30 +48,35 @@ classdef road < matlab.System & matlab.system.mixin.Propagates
     end
     % outputs
     function out = getNumOutputsImpl(obj)
-      out = 2;
+      out = 3;
     end
-    function [o1, o2] = getOutputDataTypeImpl(obj)
+    function [o1, o2, o3] = getOutputDataTypeImpl(obj)
       o1 = 'LKACCBus';
       o2 = 'double';
+      o3 = 'double';
     end
-    function [o1, o2] = getOutputSizeImpl(obj)
+    function [o1, o2, o3] = getOutputSizeImpl(obj)
       o1 = 1;
       o2 = 1;
+      o3 = [1 50];
     end
-    function [o1, o2] = getOutputNamesImpl(obj)
+    function [o1, o2, o3] = getOutputNamesImpl(obj)
       o1 = 'lk_acc_state';
       o2 = 'road_left';
+      o3 = 'preview';
     end
-    function [c1, c2] = isOutputComplexImpl(obj)
+    function [c1, c2, c3] = isOutputComplexImpl(obj)
       c1 = false;
       c2 = false;
+      c3 = false;
     end
-    function [f1, f2] = isOutputFixedSizeImpl(obj)
+    function [f1, f2, f3] = isOutputFixedSizeImpl(obj)
       f1 = true;
       f2 = true;
+      f3 = true;
     end
     
-    function [lk_acc_state, road_left] = stepImpl(obj, data)
+    function [lk_acc_state, road_left, prev] = stepImpl(obj, data)
       % position of gps receiver in (xEast, yNorth)
       r_gps = get_vehicle_pos(obj, data.latitude, data.longitude, data.el);
       
@@ -80,7 +87,7 @@ classdef road < matlab.System & matlab.system.mixin.Propagates
       % position of CG in (xEast, yNorth)
       r_cg = r_gps + r_gps_cg;
       
-      [rc, drc, kappa, road_left] = get_road_state(obj, r_cg);
+      [rc, drc, kappa, road_left, s] = get_road_state(obj, r_cg);
       
       road_state.car_x = r_cg(1);
       road_state.car_y = r_cg(2);
@@ -92,7 +99,6 @@ classdef road < matlab.System & matlab.system.mixin.Propagates
       road_state.d_road_y = drc(2);
       
       road_state.kappa = kappa;
-
 
       %%%% Transformations to ACC/LK state %%%%%
       % unit vector direction of road
@@ -124,6 +130,23 @@ classdef road < matlab.System & matlab.system.mixin.Propagates
       lk_acc_state.r = data.YawRate;
       lk_acc_state.h = 8;
       lk_acc_state.r_d = road_state.kappa * norm(global_vel);
+
+      if obj.compute_preview
+        % Compute preview
+        prev_pts = zeros(2,50);
+        for ds=1:50
+          s_prev = mod(s+ds, obj.len_path);
+          prev_pts(:,ds) = obj.get_pos(s_prev) - r_cg;
+        end
+
+        % Rotate with yaw angle
+        yaw = global_yaw;
+        prev_pts = [cos(yaw) sin(yaw); -sin(yaw) cos(yaw)]*prev_pts;
+
+        prev = prev_pts(2,:);
+      else
+        prev = zeros(1,50);
+      end
     end
   end
   methods
@@ -167,7 +190,7 @@ classdef road < matlab.System & matlab.system.mixin.Propagates
       veh_pos = [xEast; yNorth];
     end
     
-    function [rc, drc, kappa, road_left] = get_road_state(obj, veh_pos)
+    function [rc, drc, kappa, road_left, s] = get_road_state(obj, veh_pos)
       % get road states (rc: road center, drc: (d/dt) rc, kappa:
       % curvature)
 
@@ -228,17 +251,26 @@ classdef road < matlab.System & matlab.system.mixin.Propagates
     end
     
     function [rc, drc, kappa] = get_pos(obj, s)
-      % return point at distance s along path            
-      [~, idx] = sort(abs(obj.path_(:,3) - s));
-      s0 = obj.path_(idx(1),3);
-      x0 = obj.path_(idx(1),1:2);
+      % return point at distance s along path
+      % WARNING: will not work well for s outside path length            
+      idx_closest = min_idx(obj.path_(:,3) - s);
+
+      if obj.path_(idx_closest,3) < s
+        idx1 = idx_closest;
+      else
+      idx1 = idx_closest-1;
+      end
+
+      s0 = obj.path_(idx1,3);
+      x0 = obj.path_(idx1,1:2);
       
-      s1 = obj.path_(idx(2),3);
-      x1 = obj.path_(idx(2),1:2);
+      s1 = obj.path_(idx1+1,3);
+      x1 = obj.path_(idx1+1,1:2);
 
-      x = x0 * (s-s0)/(s1-s0) + x1 * (s1-s)/(s1-s0);
 
-      [rc, drc, kappa] = obj.get_road_state(x');
+      x = x0 * (s1-s)/(s1-s0) + x1 * (s-s0)/(s1-s0);
+
+      [rc, drc, kappa, ~] = obj.get_road_state(x');
     end
   end
 end
