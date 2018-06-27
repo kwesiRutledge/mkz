@@ -75,11 +75,13 @@
 
       %Set Up Buffer of Previous input values
       obj.delta_f_prev = zeros(obj.buff_len,1);
+      obj.qp_status = 0;
     end
     
     function ds = getDiscreteStateImpl(obj)
         % Return structure of properties with DiscreteState attribute
         ds.delta_f = obj.delta_f;
+        ds.qp_status = obj.qp_status;
     end
     
     function [sz,dt,cp] = getDiscreteStateSpecificationImpl(~,~)
@@ -134,6 +136,7 @@
       
       if max(abs(x_lk)) > 10
         % Obviously bogus data
+
         return
       end
 
@@ -143,6 +146,7 @@
       if mu < 3
         % Use very simple P controller
         obj.delta_f = -0.1*(x_lk(1)+0.05*x_lk(3));
+        obj.qp_status = -1;
         return
       end
        
@@ -171,13 +175,13 @@
       % Define System Matrices for trajectories
       % +++++++++++++++++++++++++++++++++++++++
 
-      sys0.A  = A;
+      sys0.A  = A; n = size(A,1);
       sys0.B  = B;
-      sys0.C  = C;
+      sys0.C  = eye(n);
       sys0.K  = K;
       sys0.x0 = x_lk;
 
-      [G,H,C_big,x0_mat] = create_skaf_n_boyd_matrices(sys,T)
+      [G,H,C_big,x0_mat] = create_skaf_n_boyd_matrices(sys0,T)
 
       % Define the Objective's Cost Matrices
       % ++++++++++++++++++++++++++++++++++++ 
