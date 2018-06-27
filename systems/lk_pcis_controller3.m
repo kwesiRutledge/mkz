@@ -70,6 +70,7 @@
       obj.data = data_temp;
       
       obj.delta_f = 0;
+      obj.qp_status = 0;
       
       obj.barrier_val = -0.1;
 
@@ -175,19 +176,44 @@
       % Define System Matrices for trajectories
       % +++++++++++++++++++++++++++++++++++++++
 
-      sys0.A  = A; n = size(A,1);
+      sys0.A  = A;
       sys0.B  = B;
-      sys0.C  = eye(n);
       sys0.K  = K;
       sys0.x0 = x_lk;
 
-      [G,H,C_big,x0_mat] = create_skaf_n_boyd_matrices(sys0,T)
+      sys0.C = eye(size(A,1));  %C is not going to be used here,
+                                %but in order for my function to work
+                                %I need it.
+
+      [G,H,C_big,x0_mat] = create_skaf_n_boyd_matrices(sys0,obj.t_horizon);
+
+      %define E-bar
+      % for t = 1: obj.t_horizon
+      %   temp_E_bar{t} = E;
+      % end
+      % E_bar = blkdiag(temp_E_bar{:});
+      E_bar = kron(eye(obj.t_horizon),E);
 
       % Define the Objective's Cost Matrices
       % ++++++++++++++++++++++++++++++++++++ 
 
-      R_x = obj.H_x;
-      r_x = obj.f_x;
+      %Make the cost matrix for the trajectory have equal weight for deviations
+      %at any point in the time horizon.
+
+      % for i = 1:obj.t_horizon+1
+      %   temp_R_x{i} = obj.d_factor^i * ( obj.H_x );
+      % end
+      % R_x = blkdiag(temp_R_x{:});
+
+      %Create Diagonal
+      temp_diag = zeros(obj.t_horizon+1,1);
+      for i = 1:obj.t_horizon+1
+        temp_diag(i) = obj.d_factor^(i-1);
+      end
+      R_x = kron(diag(temp_diag),obj.H_x);
+
+      r_x = repmat(obj.f_x,obj.t_horizon,1);
+
       R_u = obj.H_u;
       r_u = obj.f_u;
 
@@ -202,12 +228,19 @@
       % Apply MPC Quadratic Program Solver
       % ++++++++++++++++++++++++++++++++++
 
-      H = zeros(1,1);
-      f = zeros(1,1);
+      H_cost = zeros(1,1);
+      f_cost = zeros(m,1);
       
       H(1,1) = B'*R_x*B + R_u;
       f(1,1) = r_u + B'*R_x*(A*x_lk + K) + B'*R_x*E*r_d + B'*r_x;
       
+      % size(G)
+      % size(x0_mat)
+      % size((blkdiag(repmat(E,1,1,obj.t_horizon))) )
+
+      H_cost = ones(v*obj.t_horizon,v)'*H'*R_x*H*ones(obj.t_horizon*v,v) + R_u;
+      f_cost = r_u + ones(v*obj.t_horizon,v)'*H'*R_x*(G*E_bar*repmat(r_d,obj.t_horizon,1)+x0_mat );
+
       A_constr = zeros(2*m+2,1);
       b_constr = zeros(2*m+2,1);
       

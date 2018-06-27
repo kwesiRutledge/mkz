@@ -118,16 +118,26 @@ disp(' ')
 disp('Finished plotting the results of experiment 1 (duplication of commanded steering).')
 disp('=================================================================================')
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Experiment 2: Weighting the Proximity to some set of Waypoints %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%Grab the highway path
+highway_path = load('../mcity/highway.ascii');
+
+
 
 %%%%%%%%%%%%%%%%%%%%
 %% Saving Results %%
 %%%%%%%%%%%%%%%%%%%%
 
-results.name = 'mcity_data_practice2';
-results.delta_f = delta_f;
-results.lk_info = lk_info;
-results.exp2 = exp2;
+results.name = 'mcity_data_practice3';
+results.exp1 = exp1;
 results.t = t;
 results.t0 = t0;
+results.exp2.highway_path = highway_path;
+results.exp2.veh_pos = veh_pos;
+
+
 
 end

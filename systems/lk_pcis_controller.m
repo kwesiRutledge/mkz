@@ -1,12 +1,6 @@
  classdef lk_pcis_controller < matlab.System & ...
                          matlab.system.mixin.Propagates & ...
                          matlab.system.mixin.Nondirect
-  properties
-    H_x = diag([1 0 0.5 0]);
-    f_x = zeros(4,1);
-    H_u = 4;
-    f_u = 0;
-  end
 
   properties(Nontunable)
     M = 1800;
@@ -15,6 +9,11 @@
     Caf = 140000;
     Car = 120000;
     Iz = 3270;
+
+    H_x = diag([1 0 0.5 0]);
+    f_x = zeros(4,1);
+    H_u = 4;
+    f_u = 0;
 
     sol_opts = struct('DataType', 'double', 'MaxIter', 200, ...
                       'FeasibilityTol', 1e-6, 'IntegrityChecks', true);
@@ -61,7 +60,8 @@
       obj.data = data_temp;
       
       obj.delta_f = 0;
-      
+      obj.qp_status = 0;
+
       obj.barrier_val = -0.1;
       obj.qp_status = 0;
     end
@@ -69,6 +69,7 @@
     function ds = getDiscreteStateImpl(obj)
         % Return structure of properties with DiscreteState attribute
         ds.delta_f = obj.delta_f;
+        ds.qp_status = obj.qp_status;
     end
     
     function [sz,dt,cp] = getDiscreteStateSpecificationImpl(~,~)
@@ -150,7 +151,7 @@
       R_x = obj.H_x;
       r_x = obj.f_x;
       R_u = obj.H_u;
-      r_u = obj.f_u
+      r_u = obj.f_u;
 
       A_x = obj.data.poly_A;
       b_x = obj.data.poly_b;
@@ -184,7 +185,7 @@
       
       [u, status] = mpcqpsolver(Linv, f, -A_constr, -b_constr, ...
                       [], zeros(0,1), ...
-                      false(size(A_constr,1),1), obj.sol_opts)
+                      false(size(A_constr,1),1), obj.sol_opts);
 
       obj.qp_status = status;
 
@@ -199,6 +200,7 @@
       if status > 0
         % qp solved successfully
         obj.delta_f = u;
+        % disp(['obj.delta_f = ' num2str(obj.delta_f) ])
       else
         %infeasible: keep control constant       
         obj.barrier_val = -0.05;
