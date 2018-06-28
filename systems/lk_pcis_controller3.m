@@ -23,7 +23,10 @@
     Iz = 3270;
 
     buff_len = 5;
-    
+    %Set Up Time Horizon and Discount Factor
+    d_factor = 1;
+    t_horizon = 10;
+
     sol_opts = struct('DataType', 'double', 'MaxIter', 200, ...
                       'FeasibilityTol', 1e-6, 'IntegrityChecks', true);
   end
@@ -33,6 +36,7 @@
     E_lk;
     data;
     delta_f_prev;   %Buffer containing the buff_len number of previous steering inputs
+
   end
   
   properties(DiscreteState)
@@ -185,14 +189,12 @@
                                 %but in order for my function to work
                                 %I need it.
 
-      [G,H,C_big,x0_mat] = create_skaf_n_boyd_matrices(sys0,obj.t_horizon);
+      [B_w_bar,B_u_bar,C_big,x0_mat] = get_mpc_matrices(sys0,obj.t_horizon);
 
       %define E-bar
-      % for t = 1: obj.t_horizon
-      %   temp_E_bar{t} = E;
-      % end
-      % E_bar = blkdiag(temp_E_bar{:});
       E_bar = kron(eye(obj.t_horizon),E);
+
+      u_dim = size(B,2);
 
       % Define the Objective's Cost Matrices
       % ++++++++++++++++++++++++++++++++++++ 
@@ -228,18 +230,17 @@
       % Apply MPC Quadratic Program Solver
       % ++++++++++++++++++++++++++++++++++
 
-      H_cost = zeros(1,1);
+      H_cost = zeros(u_dim,u_dim);
       f_cost = zeros(m,1);
       
-      H(1,1) = B'*R_x*B + R_u;
-      f(1,1) = r_u + B'*R_x*(A*x_lk + K) + B'*R_x*E*r_d + B'*r_x;
+      % H(1,1) = B_u_bar'*R_x*B_u_bar + R_u;
+      % f(1,1) = r_u + B'*R_x*(A*x_lk + K) + B'*R_x*E*r_d + B'*r_x;
       
-      % size(G)
-      % size(x0_mat)
-      % size((blkdiag(repmat(E,1,1,obj.t_horizon))) )
+      % disp(size(R_x))
+      % disp(size(B_u_bar))
 
-      H_cost = ones(v*obj.t_horizon,v)'*H'*R_x*H*ones(obj.t_horizon*v,v) + R_u;
-      f_cost = r_u + ones(v*obj.t_horizon,v)'*H'*R_x*(G*E_bar*repmat(r_d,obj.t_horizon,1)+x0_mat );
+      H_cost = ones(u_dim*obj.t_horizon,u_dim)'*B_u_bar'*R_x*B_u_bar*ones(obj.t_horizon*u_dim,u_dim) + R_u;
+      f_cost = r_u + ones(obj.t_horizon*u_dim,u_dim)'*B_u_bar'*R_x*(B_w_bar*E_bar*repmat(r_d,obj.t_horizon,1)+x0_mat );
 
       A_constr = zeros(2*m+2,1);
       b_constr = zeros(2*m+2,1);
@@ -256,11 +257,11 @@
                                  obj.data.con.df_max];
  
       % Objective 0.5 x' H x + f' x
-      L = chol(H, 'lower');
+      L = chol(H_cost, 'lower');
       Linv = zeros(1,1);
-      Linv(1,1) = L\eye(size(H,1));
+      Linv(1,1) = L\eye(size(H_cost,1));
       
-      [u, status] = mpcqpsolver(Linv, f, -A_constr, -b_constr, ...
+      [u, status] = mpcqpsolver(Linv, f_cost, -A_constr, -b_constr, ...
                       [], zeros(0,1), ...
                       false(size(A_constr,1),1), obj.sol_opts);
 
