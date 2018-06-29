@@ -149,7 +149,7 @@
       % If the speed is too low, use a simple Controller
       % ++++++++++++++++++++++++++++++++++++++++++++++++
 
-      if mu < 3
+      if mu < 5
         % Use very simple P controller
         obj.delta_f = -0.1*(x_lk(1)+0.05*x_lk(3));
         return
@@ -247,8 +247,8 @@
       % size(x0_mat)
       % size((blkdiag(repmat(E,1,1,obj.t_horizon))) )
 
-      H_cost = ones(v*obj.t_horizon,v)'*H'*R_x*H*ones(obj.t_horizon*v,v) + R_u;
-      f_cost = r_u + ones(v*obj.t_horizon,v)'*H'*R_x*(G*E_bar*repmat(r_d,obj.t_horizon,1)+x0_mat );
+      H_cost = H'*R_x*H + kron(eye(obj.t_horizon),R_u);
+      f_cost = repmat(r_u,obj.t_horizon,1) + H'*R_x*(G*E_bar*repmat(r_d,obj.t_horizon,1)+x0_mat );
 
       A_constr = zeros(2*m+2,1);
       b_constr = zeros(2*m+2,1);
@@ -266,12 +266,14 @@
  
       % Objective 0.5 x' H x + f' x
       L = chol(H_cost, 'lower');
-      Linv = zeros(1,1);
-      Linv(1,1) = L\eye(size(H_cost,1));
+      Linv = zeros(obj.t_horizon,obj.t_horizon);
+      Linv = L\eye(size(H_cost,1));
       
-      [u, status] = mpcqpsolver(Linv, f_cost, repmat(-A_constr,obj.t_horizon+1,1), repmat(-b_constr,obj.t_horizon+1,1), ...
+      [u_tot, status] = mpcqpsolver(Linv, f_cost, -A_constr*[1 zeros(1,obj.t_horizon-1)], -b_constr, ...
                       [], zeros(0,1), ...
-                      false(size(A_constr,1)*(obj.t_horizon+1),1), obj.sol_opts);
+                      false(size(A_constr,1),1), obj.sol_opts);
+
+      u = u_tot(1);
 
       % disp(['status = ' num2str(status) ])
 
@@ -295,6 +297,7 @@
         % x_lk
         % mu
         % r_d
+        obj.delta_f = -0.1*(x_lk(1)+0.05*x_lk(3));
         
         all(A_x*x_lk <= b_x);
         obj.barrier_val = -0.05;

@@ -65,5 +65,12 @@ steering = ba_data_vec(3,:);
 figure(4); clf
 subplot(211)
 plot(data_.ba_message.Bytes.Time(tidx), throttle(tidx))
+xlabel('Time')
+ylabel('Throttle Value')
+title('Throttle Trajectory')
+
 subplot(212)
 plot(data_.ba_message.Bytes.Time(tidx), steering(tidx))
+xlabel('Time')
+ylabel('Steering Value')
+title('Steering Trajectory')

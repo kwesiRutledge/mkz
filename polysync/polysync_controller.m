@@ -25,12 +25,12 @@ function polysync_controller()
   rd.circular = 0;
   rd.setup(struct());
 
-  ACC = acc_pid_controller;
+  ACC = acc_pid_controller2;
   ACC.mu_des = 26/3.6;
   ACC.max_throttle = 0.28;
   ACC.setup(struct(), 0.0);
 
-  LK = lk_pcis_controller;
+  LK = lk_pcis_controller3;
   LK.H_u = 100;   % weight in QP for steering (larger -> less aggressive centering)
   LK.setup(struct());
 

@@ -1,6 +1,18 @@
- classdef lk_pcis_controller < matlab.System & ...
+ classdef lk_pcis_controller4 < matlab.System & ...
                          matlab.system.mixin.Propagates & ...
                          matlab.system.mixin.Nondirect
+  %Description:
+  % This constroller should automatically incorporate the previous buff_len of inputs
+  % into its calculation of the next input. (We want smoothness of the input trajectory)
+  % There will be a quadratic weight on the expression "u[t] - mean([u[t-1],u[t-2],...,u[t-buff_len] ])"
+  % This should primarily affect the mpcqpsolver's objective function.
+
+  properties
+    H_x = diag([1 0 0.5 0]);
+    f_x = zeros(4,1);
+    H_u = 4;
+    f_u = 0;
+  end
 
   properties(Nontunable)
     M = 1800;
@@ -10,11 +22,6 @@
     Car = 120000;
     Iz = 3270;
 
-    H_x = diag([1 0 0.5 0]);
-    f_x = zeros(4,1);
-    H_u = 4;
-    f_u = 0;
-
     sol_opts = struct('DataType', 'double', 'MaxIter', 200, ...
                       'FeasibilityTol', 1e-6, 'IntegrityChecks', true);
   end
@@ -23,6 +30,10 @@
     B_lk;
     E_lk;
     data;
+    delta_f_prev;   %Buffer containing the buff_len number of previous steering inputs
+    buff_len = 50;
+    t_horizon;
+    d_factor;
   end
   
   properties(DiscreteState)
@@ -32,8 +43,8 @@
   end
 
   methods
-    function obj = lk_pcis_controller(varargin)
-      % lk_pcis_controller: lane keeping controller based on a PCIS barrier.
+    function obj = lk_pcis_controller4(varargin)
+      % lk_pcis_controller2: lane keeping controller based on a PCIS barrier.
       % 
       % Inputs: 
       %  - lk_acc_state: state of lane dynamics [Bus: LKACCBus]
@@ -50,6 +61,8 @@
       %  - Iz: yaw moment of inertia [kg m^2]
 
     end
+
+
   end
 
   methods(Access = protected)
@@ -61,14 +74,20 @@
       
       obj.delta_f = 0;
       obj.qp_status = 0;
-
+      
       obj.barrier_val = -0.1;
+
+      %Set up Time Horizon and Discount Factor
+      obj.d_factor = 1;
+      obj.t_horizon = 5;
+
+      %Set Up Buffer of Previous input values
+      obj.delta_f_prev = zeros(obj.buff_len,1);
     end
     
     function ds = getDiscreteStateImpl(obj)
         % Return structure of properties with DiscreteState attribute
         ds.delta_f = obj.delta_f;
-        ds.qp_status = obj.qp_status;
     end
     
     function [sz,dt,cp] = getDiscreteStateSpecificationImpl(~,~)
@@ -129,12 +148,15 @@
       % If the speed is too low, use a simple Controller
       % ++++++++++++++++++++++++++++++++++++++++++++++++
 
-      if mu < 4
+      if mu < 3
         % Use very simple P controller
         obj.delta_f = -0.1*(x_lk(1)+0.05*x_lk(3));
         return
       end
        
+      % Define the System Matrices (given the current speed)
+      % ++++++++++++++++++++++++++++++++++++++++++++++++++++
+
       A_lk = [0, 1, mu, 0; 
           0, -(obj.Caf+obj.Car)/obj.M/mu, 0, ((obj.lr*obj.Car-obj.lf*obj.Caf)/obj.M/mu - mu); 
           0, 0, 0, 1;
@@ -149,27 +171,84 @@
       B = A_int * obj.B_lk;
       E = A_int * obj.E_lk;
 
+      n = size(A,1);
+      v = size(B,2);
+      p = size(E,2);
+
       % A = A_lk*obj.data.con.dt + eye(4);
       % B = obj.B_lk*obj.data.con.dt;
       % E = obj.E_lk*obj.data.con.dt;
       K = zeros(4,1);
       
-      R_x = obj.H_x;
-      r_x = obj.f_x;
+      % Define System Matrices for trajectories
+      % +++++++++++++++++++++++++++++++++++++++
+
+      sys0.A  = A;
+      sys0.B  = B;
+      sys0.K  = K;
+      sys0.x0 = x_lk;
+
+      sys0.C = eye(size(A,1));  %C is not going to be used here,
+                                %but in order for my function to work
+                                %I need it.
+
+      [G,H,C_big,x0_mat] = create_skaf_n_boyd_matrices(sys0,obj.t_horizon);
+
+      %define E-bar
+      % for t = 1: obj.t_horizon
+      %   temp_E_bar{t} = E;
+      % end
+      % E_bar = blkdiag(temp_E_bar{:});
+      E_bar = kron(eye(obj.t_horizon),E);
+
+
+      % Define the Objective's Cost Matrices
+      % ++++++++++++++++++++++++++++++++++++ 
+
+      %Make the cost matrix for the trajectory have equal weight for deviations
+      %at any point in the time horizon.
+
+      % for i = 1:obj.t_horizon+1
+      %   temp_R_x{i} = obj.d_factor^i * ( obj.H_x );
+      % end
+      % R_x = blkdiag(temp_R_x{:});
+
+      %Create Diagonal
+      temp_diag = zeros(obj.t_horizon+1,1);
+      for i = 1:obj.t_horizon+1
+        temp_diag(i) = obj.d_factor^(i-1);
+      end
+      R_x = kron(diag(temp_diag),obj.H_x);
+
+      r_x = repmat(obj.f_x,obj.t_horizon,1);
+
       R_u = obj.H_u;
-      r_u = obj.f_u;
+      r_u = -R_u*mean(obj.delta_f_prev);
+
+      % Retrieve the Safe Set's Polyhedral Representation
+      % +++++++++++++++++++++++++++++++++++++++++++++++++
 
       A_x = obj.data.poly_A;
       b_x = obj.data.poly_b;
 
       m = size(A_x,1);
       
-      H = zeros(1,1);
-      f = zeros(1,1);
+      % Apply MPC Quadratic Program Solver
+      % ++++++++++++++++++++++++++++++++++
+
+      H_cost = zeros(1,1);
+      f_cost = zeros(m,1);
       
-      H(1,1) = B'*R_x*B + R_u;
-      f(1,1) = r_u + B'*r_x + B'*R_x*(A*x_lk + K + E*r_d);
+      % H_cost(1,1) = B'*R_x*B + R_u;
+      % f_cost(1,1) = r_u + B'*R_x*(A*x_lk + K + E*r_d) + B'*r_x;
       
+      % size(G)
+      % size(x0_mat)
+      % size((blkdiag(repmat(E,1,1,obj.t_horizon))) )
+
+      H_cost = ones(v*obj.t_horizon,v)'*H'*R_x*H*ones(obj.t_horizon*v,v) + R_u;
+      f_cost = r_u + ones(v*obj.t_horizon,v)'*H'*R_x*(G*E_bar*repmat(r_d,obj.t_horizon,1)+x0_mat );
+
       A_constr = zeros(2*m+2,1);
       b_constr = zeros(2*m+2,1);
       
@@ -185,13 +264,13 @@
                                  obj.data.con.df_max];
  
       % Objective 0.5 x' H x + f' x
-      L = chol(H, 'lower');
+      L = chol(H_cost, 'lower');
       Linv = zeros(1,1);
-      Linv(1,1) = L\eye(size(H,1));
+      Linv(1,1) = L\eye(size(H_cost,1));
       
-      [u, status] = mpcqpsolver(Linv, f, -A_constr, -b_constr, ...
+      [u, status] = mpcqpsolver(Linv, f_cost, repmat(-A_constr,obj.t_horizon+1,1), repmat(-b_constr,obj.t_horizon+1,1), ...
                       [], zeros(0,1), ...
-                      false(size(A_constr,1),1), obj.sol_opts);
+                      false(size(A_constr,1)*(obj.t_horizon+1),1), obj.sol_opts);
 
       % disp(['status = ' num2str(status) ])
 
@@ -209,7 +288,6 @@
       if status > 0
         % qp solved successfully
         obj.delta_f = u;
-        % disp(['obj.delta_f = ' num2str(obj.delta_f) ])
       else
         %infeasible: keep control constant
         % status
@@ -217,11 +295,12 @@
         % mu
         % r_d
         
-        obj.delta_f = -0.1*(x_lk(1)+0.05*x_lk(3));
-        
         all(A_x*x_lk <= b_x);
         obj.barrier_val = -0.05;
       end
+
+      %Update Buffer of Previous Inputs
+      obj.delta_f_prev = [ obj.delta_f ; obj.delta_f_prev(2:end) ];
      
     end
 
