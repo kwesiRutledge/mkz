@@ -1,13 +1,33 @@
 %% path_plot: plot the path stored in a road object
-function [] = path_plot(file)
+function [] = path_plot(varargin)
+	%Description:
+	%	
+	%Input Format:
+	%	path_plot(file) 						%Here for historical reasons
+	%	path_plot(filename,pathname)
+	%	path_plot(filename,pathname,curr_dir)
 
-	[filename, pathname] = uigetfile;
-	
+	switch nargin
+	case 1
+		disp('Idk what this means.')
+		[filename, pathname] = uigetfile;
+	case 2
+		filename = varargin{1};
+		pathname = varargin{2};
+		path_to_mkz = [];
+	case 3
+		filename = varargin{1};
+		pathname = varargin{2};
+		path_to_mkz = varargin{3};
+	end
+
 	r = road;
-	r.pathfile = strcat(pathname, '/', filename);
-	r.setup(struct('latitude', 0, 'longitude', 0));
+	r.pathfile = strcat(pathname, filename)
+	r.setup(struct('latitude', 0, 'longitude', 0))
 
-	s_vec = 0:0.5:r.len_path;
+	size(r.path_)
+
+	s_vec = 0:0.5:r.len_path
 
 	[rc, drc, kappa] = arrayfun(@(s) r.get_pos(s), s_vec, ...
 						  		'UniformOutput', false);
@@ -21,7 +41,7 @@ function [] = path_plot(file)
 
 	figure(1); clf; 
 	hold on;
-	mapshow('mcity/mcity.tiff');
+	mapshow([ path_to_mkz 'mcity/mcity.tiff']);
 	plot(long, lat);
 	for i=1:length(long)
 		plot([long(i) long(i)+kappa(i)*tt(i,1)], [lat(i) lat(i)+kappa(i)*tt(i,2)], 'c')

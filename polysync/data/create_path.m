@@ -1,7 +1,11 @@
-% Read long/lat from data file and save evenly spaced local waypoints
-filename = uigetfile;
+%% Import Functions
+%Add the Main Directory to the Path
+addpath('../../')
 
-data = load(filename);
+% Read long/lat from data file and save evenly spaced local waypoints
+[filename,pathname] = uigetfile; %Select the mat file where data is saved.
+
+data = load(filename)
 
 lat = rad2deg(squeeze(data.gpsdata.Latitude.Data));
 long = rad2deg(squeeze(data.gpsdata.Longitude.Data));
@@ -13,7 +17,8 @@ long = long(tidx);
 
 h = 0;
 
-save_file = [filename, '.ascii'];	% file for saving path
+file_title = filename([1:end-4]); %Remove the last four characters (.mat)
+save_file = [file_title, '.ascii']	% file for saving path
 
 nom_dist = 1;   % distance between waypoints [m]
 
@@ -47,6 +52,11 @@ while true
     curr = next;
 end
 
-dlmwrite(save_file, waypoints, 'delimiter', '\t', 'precision', '%.4f');
+dlmwrite(save_file, waypoints, 'delimiter', '\t', 'precision', '%.4f')
 
-path_plot(save_file);
+input('Press any key to move to path_plot...')
+
+path_plot(save_file,pathname,'../../');
+
+%% Clean Up Path
+rmpath('../../')
