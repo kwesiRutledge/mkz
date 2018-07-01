@@ -8,9 +8,9 @@
 
     windup_reg = 2;  % integrate only absolute errors smaller than this number
     mem_length = 20; % number of timesteps to remember for computing derivative
-    throttle_step = 0.3;
+    throttle_step = 0.27;
     stab_thres = 0.5;
-    max_throttle = 0.3;  % max output value 
+    max_throttle = 0.28;  % max output value 
   end
   
   properties(DiscreteState)
@@ -93,7 +93,6 @@
 %       disp(obj.mu_des);
       obj.my_step = obj.my_step +1;
       e = obj.mu_des - state.mu;
-%       disp(e);
       obj.e_mem = [obj.e_mem(2:end) e];
       obj.e_mem_dt = [obj.e_mem_dt(2:end) dt];
 
@@ -107,11 +106,14 @@
       throttle = obj.K_p * e + obj.K_i * obj.e_int + obj.K_d * d_e;
       
       
-      if sum(abs(obj.e_mem))/obj.mem_length < obj.stab_thres && obj.my_step > 15000
+      if sum(abs(obj.e_mem))/obj.mem_length < obj.stab_thres && obj.my_step > obj.mem_length
         obj.stab_flag = 1;
+        last_mu = state.mu
+        last_throttle = throttle
       end
       if obj.stab_flag > 0
           throttle = obj.throttle_step;
+      %    1;
       end
       throttle = max(0, throttle);
       throttle = min(obj.max_throttle, throttle);

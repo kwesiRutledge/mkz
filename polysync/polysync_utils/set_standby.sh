@@ -1,0 +1,1 @@
+polysync-core-manager -q
