@@ -18,7 +18,7 @@ long = long(tidx);
 h = 0;
 
 file_title = filename([1:end-4]); %Remove the last four characters (.mat)
-save_file = [file_title, '.ascii']	% file for saving path
+save_file = [file_title, '.ascii'];	% file for saving path
 
 nom_dist = 1;   % distance between waypoints [m]
 
@@ -52,9 +52,7 @@ while true
     curr = next;
 end
 
-dlmwrite(save_file, waypoints, 'delimiter', '\t', 'precision', '%.4f')
-
-input('Press any key to move to path_plot...')
+dlmwrite(save_file, waypoints, 'delimiter', '\t', 'precision', '%.4f');
 
 path_plot(save_file,pathname,'../../');
 
