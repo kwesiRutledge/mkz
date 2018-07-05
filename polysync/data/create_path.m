@@ -5,7 +5,7 @@ addpath('../../')
 % Read long/lat from data file and save evenly spaced local waypoints
 [filename,pathname] = uigetfile; %Select the mat file where data is saved.
 
-data = load(filename)
+data = load(filename);
 
 lat = rad2deg(squeeze(data.gpsdata.Latitude.Data));
 long = rad2deg(squeeze(data.gpsdata.Longitude.Data));

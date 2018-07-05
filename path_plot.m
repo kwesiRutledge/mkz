@@ -7,6 +7,8 @@ function [] = path_plot(varargin)
 	%	path_plot(filename,pathname)
 	%	path_plot(filename,pathname,curr_dir)
 
+	path_to_mkz = [];
+
 	switch nargin
 	case 1
 		disp('Idk what this means.')
@@ -14,7 +16,6 @@ function [] = path_plot(varargin)
 	case 2
 		filename = varargin{1};
 		pathname = varargin{2};
-		path_to_mkz = [];
 	case 3
 		filename = varargin{1};
 		pathname = varargin{2};
@@ -22,12 +23,12 @@ function [] = path_plot(varargin)
 	end
 
 	r = road;
-	r.pathfile = strcat(pathname, filename)
-	r.setup(struct('latitude', 0, 'longitude', 0))
+	r.pathfile = strcat(pathname, filename);
+	r.setup(struct('latitude', 0, 'longitude', 0));
 
-	size(r.path_)
+	disp('Nominal.')
 
-	s_vec = 0:0.5:r.len_path
+	s_vec = 0:0.5:r.len_path;
 
 	[rc, drc, kappa] = arrayfun(@(s) r.get_pos(s), s_vec, ...
 						  		'UniformOutput', false);

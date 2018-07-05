@@ -253,13 +253,13 @@ classdef road < matlab.System & matlab.system.mixin.Propagates
     function [rc, drc, kappa] = get_pos(obj, s)
       % return point at distance s along path
       % WARNING: will not work well for s outside path length            
-      s
-      idx_closest = min_idx(obj.path_(:,3) - s)
+      
+      idx_closest = min_idx(obj.path_(:,3) - s);
 
       if obj.path_(idx_closest,3) <= s
-        idx1 = idx_closest
+        idx1 = idx_closest;
       else
-      idx1 = idx_closest-1
+      idx1 = idx_closest-1;
       end
 
       s0 = obj.path_(idx1,3);
