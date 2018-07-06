@@ -31,7 +31,7 @@ function test1_controller_from_standing()
 
   % Set up systems
   rd = road;
-  rd.pathfile = '../mcity/highway.ascii';
+  rd.pathfile = '../../mcity/highway.ascii';
   rd.circular = 0;
   rd.setup(struct());
 
