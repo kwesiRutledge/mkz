@@ -61,7 +61,12 @@ function [varargout] = get_mpc_matrices(varargin)
 		end 
 	end
 
-	C_big = [ blkdiag(C_at_each_n{:}) zeros( size(sys.C) * [ T 0 ; 0 1 ] ) ];
+	%C_big = [ blkdiag(C_at_each_n{:}) zeros( size(sys.C) * [ T 0 ; 0 1 ] ) ];
+	%Doesn't seem like we can use the {:} operator for cell matrices.
+	C_big = zeros(size(sys.C,1)*T,size(sys.C,2)*(T+1));
+	for i = 1:T
+		C_big( size(sys.C,1)*(i-1)+[1:size(sys.C,1)],[size(sys.C,2)*(i-1)+[1:size(sys.C,2)]] ) = C_at_each_n{i};
+	end
 
 	%%%%%%%%%%%%%%%%%%%%%%
 	%% Optional Outputs %%

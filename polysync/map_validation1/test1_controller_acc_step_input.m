@@ -2,8 +2,6 @@
 % first time trying to control the car in Mcity
 % ysahin
 function test1_controller_acc_step_input()
-  addpath(genpath('../../'))
-
   MU_DES = 25;              % desired forward speed of the car (km/h)
   INPUT_STEP = 0.19;        % desired step-input (+ throttle, - brake)   
 
